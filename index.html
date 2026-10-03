@@ -86,6 +86,7 @@ details[open] .name::before { content: "▾ "; }
 .body p { margin: 0; }
 .drill { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg); display: grid; gap: 4px; color: var(--fg); }
 .drill .won { text-align: left; color: var(--stamp); }
+.drill a { font-size: 12px; }
 .meta { font: 12px var(--mono); color: var(--muted); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; border-block: 1px dashed var(--line); padding-block: 8px; }
 
 .note { font-size: 13px; color: var(--muted); }
@@ -162,133 +163,6 @@ a { color: var(--ink); }
   </section>
 </div>
 
-<script>
-(function () {
-  var TOTAL = 728.0e12;
-  var SECTORS = [
-    ['보건·복지·고용', 269.1, '국민연금·기초연금, 건강보험 지원, 아동수당, 실업급여, 일자리 사업 등.'],
-    ['일반·지방행정', 121.1, '지방자치단체로 내려보내는 교부세, 나랏빚 이자, 중앙부처 운영비 등.'],
-    ['교육', 99.8, '시도교육청으로 가는 교육재정교부금, 대학·장학금 지원 등.'],
-    ['국방', 66.3, '장병 인건비·급식, 무기 도입과 전력 유지 등.'],
-    ['R&D', 35.3, '국가 연구개발 사업. 다른 분야와 일부 겹칩니다.'],
-    ['산업·중소기업·에너지', 32.3, '중소기업·소상공인 지원, 에너지 전환, 산업 육성 등.'],
-    ['농림·수산·식품', 27.9, '농어민 직불금, 농산물 가격 안정, 수산 지원 등.'],
-    ['SOC', 27.5, '도로·철도·항만 같은 사회기반시설 건설과 유지.'],
-    ['공공질서·안전', 27.2, '경찰·소방·해경·법원·교정 등.'],
-    ['환경', 14.0, '상하수도, 대기·수질 관리, 탄소중립 사업 등.'],
-    ['문화·체육·관광', 9.6, '문화예술 지원, 관광 진흥, 체육단체 보조금 등.', [
-      ['대한축구협회 국고 보조금', 125e8, '국가대표·유소년·지도자 육성 명목. 기사 기준 1년 100억~150억 원.']
-    ]],
-    ['외교·통일', 7.0, '재외공관 운영, 공적개발원조(ODA), 남북협력 등.']
-  ];
-
-  // 근로소득공제
-  function earnedDeduction(g) {
-    var d;
-    if (g <= 5e6) d = g * 0.7;
-    else if (g <= 15e6) d = 3.5e6 + (g - 5e6) * 0.4;
-    else if (g <= 45e6) d = 7.5e6 + (g - 15e6) * 0.15;
-    else if (g <= 100e6) d = 12e6 + (g - 45e6) * 0.05;
-    else d = 14.75e6 + (g - 100e6) * 0.02;
-    return Math.min(d, 20e6);
-  }
-  // 종합소득세 기본세율
-  var BRACKETS = [[14e6, .06], [50e6, .15], [88e6, .24], [150e6, .35], [300e6, .38], [500e6, .40], [1000e6, .42], [Infinity, .45]];
-  function progressive(base) {
-    var tax = 0, prev = 0;
-    for (var i = 0; i < BRACKETS.length && base > prev; i++) {
-      var top = BRACKETS[i][0];
-      tax += (Math.min(base, top) - prev) * BRACKETS[i][1];
-      prev = top;
-    }
-    return tax;
-  }
-  // 근로소득세액공제 (한도 포함)
-  function earnedCredit(calc, g) {
-    var c = calc <= 1.3e6 ? calc * 0.55 : 715e3 + (calc - 1.3e6) * 0.3;
-    var cap;
-    if (g <= 33e6) cap = 740e3;
-    else if (g <= 70e6) cap = Math.max(660e3, 740e3 - (g - 33e6) * 0.008);
-    else if (g <= 120e6) cap = Math.max(500e3, 660e3 - (g - 70e6) * 0.5);
-    else cap = Math.max(200e3, 500e3 - (g - 120e6) * 0.5);
-    return Math.min(c, cap);
-  }
-
-  function compute(g, dep, spendRate) {
-    var pension = g * 0.0475, health = g * 0.03595, care = health * 0.1314, emp = g * 0.009;
-    var ins = pension + health + care + emp;
-    var base = Math.max(0, g - earnedDeduction(g) - 1.5e6 * (1 + dep) - ins);
-    var calc = progressive(base);
-    var income = Math.max(0, calc - earnedCredit(calc, g) - 130e3);
-    var local = income * 0.1;
-    var afterTax = g - ins - income - local;
-    var vat = afterTax * spendRate * 0.6 / 11;
-    return { ins: ins, income: income, local: local, vat: vat, net: afterTax - vat };
-  }
-
-  var $ = function (id) { return document.getElementById(id); };
-  var fmt = function (n) { return n >= 10 ? Math.round(n).toLocaleString('ko-KR') : n.toFixed(n >= 1 ? 1 : 2); };
-  var lines = $('lines');
-  var max = Math.max.apply(null, SECTORS.map(function (s) { return s[1]; }));
-  SECTORS.forEach(function (s, i) {
-    var d = document.createElement('details');
-    var drill = (s[3] || []).map(function (x, j) {
-      return '<div class="drill"><b>' + x[0] + '</b><span class="won" data-sub="' + i + '-' + j + '"></span><span>' + x[2] + '</span></div>';
-    }).join('');
-    d.innerHTML = '<summary><span class="name">' + s[0] + '</span><span class="won" data-i="' + i + '"></span>' +
-      '<span class="bar"><i style="width:' + (s[1] / max * 100).toFixed(1) + '%"></i></span>' +
-      '<span class="pct">' + s[1].toFixed(1) + '조 원 · ' + (s[1] * 1e12 / TOTAL * 100).toFixed(1) + '%</span></summary>' +
-      '<div class="body"><p>' + s[2] + '</p>' + drill + '</div>';
-    lines.appendChild(d);
-  });
-  try { lines.children[10].open = true; } catch (e) {}
-
-  var PARTS = [
-    ['income', '근로소득세', '나라로 갑니다', '--c-inc'],
-    ['local', '지방소득세', '소득세의 10%, 지자체로 갑니다', '--c-loc'],
-    ['vat', '부가세 (어림)', '물건·서비스를 살 때 냅니다', '--c-vat'],
-    ['ins', '4대보험', '세금이 아닌 연금·보험료', '--c-ins'],
-    ['net', '내 손에 남는 돈', '세금·보험료를 빼고 쓰고 남는 돈', '--c-net']
-  ];
-
-  function render() {
-    var g = Number($('salary').value.replace(/[^0-9]/g, '')) || 0;
-    var dep = Number($('dep').value);
-    var sr = Number($('spend').value) / 100;
-    $('spendv').textContent = Math.round(sr * 100) + '%';
-    var r = compute(g, dep, sr);
-    $('stack').innerHTML = PARTS.map(function (p) {
-      return '<i title="' + p[1] + '" style="width:' + (g ? r[p[0]] / g * 100 : 0) + '%;background:var(' + p[3] + ')"></i>';
-    }).join('');
-    $('legend').innerHTML = PARTS.map(function (p) {
-      return '<div class="lg"><span class="dot" style="background:var(' + p[3] + ')"></span><span><b>' + p[1] + '</b><small>' + p[2] + '</small></span><span class="won">' + fmt(r[p[0]]) + '원</span></div>';
-    }).join('');
-    var taxes = r.income + r.local + r.vat;
-    $('taxsum').textContent = fmt(taxes) + '원';
-    $('rate').textContent = g ? '연봉의 ' + (taxes / g * 100).toFixed(1) + '% · 한 달에 약 ' + fmt(taxes / 12) + '원' : '';
-    var nat = r.income + r.vat * 0.747, loc = r.local + r.vat * 0.253;
-    $('nat').textContent = fmt(nat) + '원';
-    $('loc').textContent = fmt(loc) + '원';
-    SECTORS.forEach(function (s, i) {
-      lines.querySelector('[data-i="' + i + '"]').textContent = fmt(nat * s[1] * 1e12 / TOTAL) + '원';
-      (s[3] || []).forEach(function (x, j) {
-        lines.querySelector('[data-sub="' + i + '-' + j + '"]').textContent = '내 몫 약 ' + fmt(nat * x[1] / TOTAL) + '원';
-      });
-    });
-  }
-
-  $('salary').addEventListener('input', function () {
-    var digits = this.value.replace(/[^0-9]/g, '');
-    this.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
-    render();
-  });
-  $('dep').addEventListener('change', render);
-  $('spend').addEventListener('input', render);
-  document.querySelectorAll('.chips button').forEach(function (b) {
-    b.addEventListener('click', function () { $('salary').value = Number(b.dataset.v).toLocaleString('ko-KR'); render(); });
-  });
-  render();
-})();
-</script>
+<script type="module" src="src/app.js"></script>
 </body>
 </html>
