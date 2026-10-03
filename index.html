@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="연봉을 넣으면 내 세금이 얼마인지 어림하고, 그 세금이 정부 예산 12개 분야와 보조금 단체로 얼마씩 가는지 보여줍니다.">
+<meta property="og:title" content="내 세금 영수증">
+<meta property="og:description" content="내 연봉의 세금이 나라 살림 어디로 가는지 영수증처럼 보여줍니다.">
+<meta property="og:type" content="website">
+<meta name="color-scheme" content="light dark">
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>내 세금 영수증</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* 레이아웃: 위에서 아래로 돈이 흐르는 한 줄 구성. 연봉 입력 → 연봉 쪼개기 막대 → 세금이 가는 곳 → 나라 살림 영수증 → 근거 */
+:root {
+  --bg: #eef1f4; --paper: #ffffff; --fg: #15191e; --muted: #5b6573;
+  --ink: #2b4c7e; --stamp: #c8372d; --line: #d5dbe3; --bar: #c9d6ea;
+  --c-ins: #8a96a8; --c-inc: #2b4c7e; --c-loc: #5f8fd0; --c-vat: #c8372d; --c-net: #d9e1ea;
+  --display: "Black Han Sans", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1116; --paper: #181d25; --fg: #e5e9ef; --muted: #9aa5b4;
+  --ink: #8fb2ea; --stamp: #ff7a6e; --line: #2a313c; --bar: #2c3d5a;
+  --c-ins: #6b7687; --c-inc: #8fb2ea; --c-loc: #4f78b3; --c-vat: #ff7a6e; --c-net: #2a313c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e1116; --paper: #181d25; --fg: #e5e9ef; --muted: #9aa5b4;
+  --ink: #8fb2ea; --stamp: #ff7a6e; --line: #2a313c; --bar: #2c3d5a;
+  --c-ins: #6b7687; --c-inc: #8fb2ea; --c-loc: #4f78b3; --c-vat: #ff7a6e; --c-net: #2a313c; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.6; }
+.wrap { max-width: 640px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 48px; display: grid; gap: 26px; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 8vw, 42px); line-height: 1.15; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--display); font-weight: 400; font-size: 20px; margin: 0 0 10px; }
+.lede { color: var(--muted); margin: 8px 0 0; max-width: 60ch; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 18px; display: grid; gap: 14px; }
+
+.inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.inputs .full { grid-column: 1 / -1; }
+.field { display: grid; gap: 6px; min-width: 0; }
+label { font-weight: 600; font-size: 14px; }
+.hint { font-size: 12px; color: var(--muted); }
+input[type=text], select { font: 600 18px var(--mono); padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); width: 100%; min-width: 0; font-variant-numeric: tabular-nums; }
+#salary { font-size: 24px; }
+input[type=range] { width: 100%; accent-color: var(--ink); }
+input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chips button { font: 13px var(--body); padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--fg); cursor: pointer; }
+.chips button:hover { border-color: var(--ink); }
+@media (max-width: 460px) { .inputs { grid-template-columns: 1fr; } }
+
+.stack { display: flex; height: 34px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+.stack i { display: block; height: 100%; transition: width .3s; }
+@media (prefers-reduced-motion: reduce) { .stack i { transition: none; } }
+.legend { display: grid; gap: 6px; }
+.lg { display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: baseline; }
+.dot { width: 12px; height: 12px; border-radius: 3px; align-self: center; }
+.lg b { font-weight: 600; }
+.lg small { display: block; color: var(--muted); font-size: 12px; }
+.won { font: 600 15px var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.sum { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; border-top: 1px dashed var(--line); padding-top: 10px; }
+.sum span:first-child { font-weight: 600; }
+.sum .won { color: var(--stamp); font-size: 20px; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dest { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 4px; min-width: 0; background: var(--bg); }
+.dest .won { text-align: left; font-size: 20px; }
+.dest p { margin: 0; color: var(--muted); font-size: 13px; }
+.dest.nat { border: 2px solid var(--ink); }
+@media (max-width: 460px) { .split { grid-template-columns: 1fr; } }
+
+.lines { display: grid; gap: 2px; }
+details { border-bottom: 1px dotted var(--line); }
+summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 9px 2px; }
+summary::-webkit-details-marker { display: none; }
+.name { font-weight: 600; min-width: 0; }
+.name::before { content: "▸ "; color: var(--muted); font-size: 12px; }
+details[open] .name::before { content: "▾ "; }
+.bar { grid-column: 1 / -1; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--bar); border-radius: 3px; }
+.pct { font: 12px var(--mono); color: var(--muted); grid-column: 1 / -1; }
+.body { padding: 2px 4px 14px 18px; color: var(--muted); font-size: 14px; display: grid; gap: 8px; }
+.body p { margin: 0; }
+.drill { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg); display: grid; gap: 4px; color: var(--fg); }
+.drill .won { text-align: left; color: var(--stamp); }
+.meta { font: 12px var(--mono); color: var(--muted); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; border-block: 1px dashed var(--line); padding-block: 8px; }
+
+.note { font-size: 13px; color: var(--muted); }
+.note ul { padding-left: 18px; margin: 0; }
+.note li { margin-bottom: 4px; }
+a { color: var(--ink); }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>내 세금 영수증</h1>
+    <p class="lede">연봉을 넣으면 세금을 얼마 내는지 어림하고, 그 돈이 나라 살림 어디에 얼마씩 쓰이는지 따라갑니다.</p>
+  </header>
+
+  <section class="card" aria-labelledby="in-h">
+    <h2 id="in-h">내 연봉</h2>
+    <div class="inputs">
+      <div class="field full">
+        <label for="salary">세전 연봉 (원)</label>
+        <input id="salary" type="text" inputmode="numeric" value="50,000,000" autocomplete="off">
+        <div class="chips" role="group" aria-label="예시 연봉">
+          <button type="button" data-v="30000000">3,000만</button>
+          <button type="button" data-v="50000000">5,000만</button>
+          <button type="button" data-v="80000000">8,000만</button>
+          <button type="button" data-v="150000000">1억 5,000만</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="dep">부양가족 (본인 제외)</label>
+        <select id="dep"><option value="0">없음</option><option value="1">1명</option><option value="2">2명</option><option value="3">3명</option><option value="4">4명</option></select>
+      </div>
+      <div class="field">
+        <label for="spend">실수령액 중 쓰는 비율 <span id="spendv">60%</span></label>
+        <input id="spend" type="range" min="20" max="100" step="5" value="60">
+        <span class="hint">부가세를 어림하는 데 씁니다</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="flow-h">
+    <h2 id="flow-h">연봉이 이렇게 나뉩니다</h2>
+    <div class="stack" id="stack" role="img" aria-label="연봉 구성 막대"></div>
+    <div class="legend" id="legend"></div>
+    <div class="sum"><span>1년에 내는 세금 합계</span><span class="won" id="taxsum">0원</span></div>
+    <div class="hint" id="rate"></div>
+  </section>
+
+  <section class="card" aria-labelledby="dest-h">
+    <h2 id="dest-h">세금이 가는 곳</h2>
+    <div class="split">
+      <div class="dest nat"><b>나라 (국세)</b><span class="won" id="nat">0원</span><p>소득세 + 부가세의 74.7%. 아래 영수증에서 12개 분야로 나눠 봅니다.</p></div>
+      <div class="dest"><b>시·도, 시·군·구 (지방세)</b><span class="won" id="loc">0원</span><p>지방소득세 + 부가세 중 지방소비세 25.3%. 내가 사는 지자체 살림에 씁니다.</p></div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="r-h">
+    <h2 id="r-h">나라로 간 세금 영수증</h2>
+    <div class="meta"><span>정부 총지출 728.0조 원</span><span>12대 분야 · 2026 예산안</span></div>
+    <div class="lines" id="lines"></div>
+  </section>
+
+  <section class="note" aria-labelledby="note-h">
+    <h2 id="note-h" style="font-size:17px">계산 방법과 한계</h2>
+    <ul>
+      <li>근로소득세는 2026년 세율 구간(6~45%), 근로소득공제, 본인·부양가족 기본공제(1명당 150만 원), 근로소득세액공제, 표준세액공제 13만 원만 넣어 계산했습니다. 신용카드·보험료·의료비 공제 같은 연말정산 항목은 빠져 있어 실제 세금은 이보다 적을 수 있습니다.</li>
+      <li>4대보험(국민연금 4.75%, 건강보험 약 3.6%, 장기요양, 고용보험 0.9%)은 근삿값이며 상한액을 반영하지 않았습니다. 4대보험은 세금이 아니라 연금·보험 기금으로 갑니다.</li>
+      <li>부가세는 쓰는 돈의 60%가 과세 품목이라고 보고 그 금액의 1/11로 어림했습니다.</li>
+      <li>나라 돈은 한 통장에 모여 쓰이므로, 국세가 정부 총지출과 같은 비율로 쓰인다고 보고 나눴습니다. R&D가 다른 분야와 일부 겹쳐 분야 비중 합이 100%를 조금 넘습니다.</li>
+      <li>축구협회 보조금은 기사에 나온 1년 100억~150억 원의 가운데값 125억 원입니다.</li>
+      <li>출처: <a href="https://nabo.go.kr/board/file/bulkDown.do?idx=8946&amp;bid=19" target="_blank" rel="noopener">국회예산정책처, 2026년도 예산안 분야별 재원배분 분석</a> · <a href="https://www.korea.kr/news/policyNewsView.do?newsId=148955773" target="_blank" rel="noopener">정책브리핑, 728조 규모 2026년 예산 국회 통과</a> · <a href="https://www.mt.co.kr/article/2026062909245254637" target="_blank" rel="noopener">머니투데이, 「매년 300억 어디다 썼나」</a></li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(function () {
+  var TOTAL = 728.0e12;
+  var SECTORS = [
+    ['보건·복지·고용', 269.1, '국민연금·기초연금, 건강보험 지원, 아동수당, 실업급여, 일자리 사업 등.'],
+    ['일반·지방행정', 121.1, '지방자치단체로 내려보내는 교부세, 나랏빚 이자, 중앙부처 운영비 등.'],
+    ['교육', 99.8, '시도교육청으로 가는 교육재정교부금, 대학·장학금 지원 등.'],
+    ['국방', 66.3, '장병 인건비·급식, 무기 도입과 전력 유지 등.'],
+    ['R&D', 35.3, '국가 연구개발 사업. 다른 분야와 일부 겹칩니다.'],
+    ['산업·중소기업·에너지', 32.3, '중소기업·소상공인 지원, 에너지 전환, 산업 육성 등.'],
+    ['농림·수산·식품', 27.9, '농어민 직불금, 농산물 가격 안정, 수산 지원 등.'],
+    ['SOC', 27.5, '도로·철도·항만 같은 사회기반시설 건설과 유지.'],
+    ['공공질서·안전', 27.2, '경찰·소방·해경·법원·교정 등.'],
+    ['환경', 14.0, '상하수도, 대기·수질 관리, 탄소중립 사업 등.'],
+    ['문화·체육·관광', 9.6, '문화예술 지원, 관광 진흥, 체육단체 보조금 등.', [
+      ['대한축구협회 국고 보조금', 125e8, '국가대표·유소년·지도자 육성 명목. 기사 기준 1년 100억~150억 원.']
+    ]],
+    ['외교·통일', 7.0, '재외공관 운영, 공적개발원조(ODA), 남북협력 등.']
+  ];
+
+  // 근로소득공제
+  function earnedDeduction(g) {
+    var d;
+    if (g <= 5e6) d = g * 0.7;
+    else if (g <= 15e6) d = 3.5e6 + (g - 5e6) * 0.4;
+    else if (g <= 45e6) d = 7.5e6 + (g - 15e6) * 0.15;
+    else if (g <= 100e6) d = 12e6 + (g - 45e6) * 0.05;
+    else d = 14.75e6 + (g - 100e6) * 0.02;
+    return Math.min(d, 20e6);
+  }
+  // 종합소득세 기본세율
+  var BRACKETS = [[14e6, .06], [50e6, .15], [88e6, .24], [150e6, .35], [300e6, .38], [500e6, .40], [1000e6, .42], [Infinity, .45]];
+  function progressive(base) {
+    var tax = 0, prev = 0;
+    for (var i = 0; i < BRACKETS.length && base > prev; i++) {
+      var top = BRACKETS[i][0];
+      tax += (Math.min(base, top) - prev) * BRACKETS[i][1];
+      prev = top;
+    }
+    return tax;
+  }
+  // 근로소득세액공제 (한도 포함)
+  function earnedCredit(calc, g) {
+    var c = calc <= 1.3e6 ? calc * 0.55 : 715e3 + (calc - 1.3e6) * 0.3;
+    var cap;
+    if (g <= 33e6) cap = 740e3;
+    else if (g <= 70e6) cap = Math.max(660e3, 740e3 - (g - 33e6) * 0.008);
+    else if (g <= 120e6) cap = Math.max(500e3, 660e3 - (g - 70e6) * 0.5);
+    else cap = Math.max(200e3, 500e3 - (g - 120e6) * 0.5);
+    return Math.min(c, cap);
+  }
+
+  function compute(g, dep, spendRate) {
+    var pension = g * 0.0475, health = g * 0.03595, care = health * 0.1314, emp = g * 0.009;
+    var ins = pension + health + care + emp;
+    var base = Math.max(0, g - earnedDeduction(g) - 1.5e6 * (1 + dep) - ins);
+    var calc = progressive(base);
+    var income = Math.max(0, calc - earnedCredit(calc, g) - 130e3);
+    var local = income * 0.1;
+    var afterTax = g - ins - income - local;
+    var vat = afterTax * spendRate * 0.6 / 11;
+    return { ins: ins, income: income, local: local, vat: vat, net: afterTax - vat };
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = function (n) { return n >= 10 ? Math.round(n).toLocaleString('ko-KR') : n.toFixed(n >= 1 ? 1 : 2); };
+  var lines = $('lines');
+  var max = Math.max.apply(null, SECTORS.map(function (s) { return s[1]; }));
+  SECTORS.forEach(function (s, i) {
+    var d = document.createElement('details');
+    var drill = (s[3] || []).map(function (x, j) {
+      return '<div class="drill"><b>' + x[0] + '</b><span class="won" data-sub="' + i + '-' + j + '"></span><span>' + x[2] + '</span></div>';
+    }).join('');
+    d.innerHTML = '<summary><span class="name">' + s[0] + '</span><span class="won" data-i="' + i + '"></span>' +
+      '<span class="bar"><i style="width:' + (s[1] / max * 100).toFixed(1) + '%"></i></span>' +
+      '<span class="pct">' + s[1].toFixed(1) + '조 원 · ' + (s[1] * 1e12 / TOTAL * 100).toFixed(1) + '%</span></summary>' +
+      '<div class="body"><p>' + s[2] + '</p>' + drill + '</div>';
+    lines.appendChild(d);
+  });
+  try { lines.children[10].open = true; } catch (e) {}
+
+  var PARTS = [
+    ['income', '근로소득세', '나라로 갑니다', '--c-inc'],
+    ['local', '지방소득세', '소득세의 10%, 지자체로 갑니다', '--c-loc'],
+    ['vat', '부가세 (어림)', '물건·서비스를 살 때 냅니다', '--c-vat'],
+    ['ins', '4대보험', '세금이 아닌 연금·보험료', '--c-ins'],
+    ['net', '내 손에 남는 돈', '세금·보험료를 빼고 쓰고 남는 돈', '--c-net']
+  ];
+
+  function render() {
+    var g = Number($('salary').value.replace(/[^0-9]/g, '')) || 0;
+    var dep = Number($('dep').value);
+    var sr = Number($('spend').value) / 100;
+    $('spendv').textContent = Math.round(sr * 100) + '%';
+    var r = compute(g, dep, sr);
+    $('stack').innerHTML = PARTS.map(function (p) {
+      return '<i title="' + p[1] + '" style="width:' + (g ? r[p[0]] / g * 100 : 0) + '%;background:var(' + p[3] + ')"></i>';
+    }).join('');
+    $('legend').innerHTML = PARTS.map(function (p) {
+      return '<div class="lg"><span class="dot" style="background:var(' + p[3] + ')"></span><span><b>' + p[1] + '</b><small>' + p[2] + '</small></span><span class="won">' + fmt(r[p[0]]) + '원</span></div>';
+    }).join('');
+    var taxes = r.income + r.local + r.vat;
+    $('taxsum').textContent = fmt(taxes) + '원';
+    $('rate').textContent = g ? '연봉의 ' + (taxes / g * 100).toFixed(1) + '% · 한 달에 약 ' + fmt(taxes / 12) + '원' : '';
+    var nat = r.income + r.vat * 0.747, loc = r.local + r.vat * 0.253;
+    $('nat').textContent = fmt(nat) + '원';
+    $('loc').textContent = fmt(loc) + '원';
+    SECTORS.forEach(function (s, i) {
+      lines.querySelector('[data-i="' + i + '"]').textContent = fmt(nat * s[1] * 1e12 / TOTAL) + '원';
+      (s[3] || []).forEach(function (x, j) {
+        lines.querySelector('[data-sub="' + i + '-' + j + '"]').textContent = '내 몫 약 ' + fmt(nat * x[1] / TOTAL) + '원';
+      });
+    });
+  }
+
+  $('salary').addEventListener('input', function () {
+    var digits = this.value.replace(/[^0-9]/g, '');
+    this.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
+    render();
+  });
+  $('dep').addEventListener('change', render);
+  $('spend').addEventListener('input', render);
+  document.querySelectorAll('.chips button').forEach(function (b) {
+    b.addEventListener('click', function () { $('salary').value = Number(b.dataset.v).toLocaleString('ko-KR'); render(); });
+  });
+  render();
+})();
+</script>
+</body>
+</html>
